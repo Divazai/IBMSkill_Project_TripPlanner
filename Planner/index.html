@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simple Trip Planner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Geist Mono', 'ui-monospace', 'monospace'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            bg:      '#0D0D12',
+            surface: '#181820',
+            card:    '#1E1E28',
+            accent:  '#6C5DD3',
+            accent2: '#7C3AED',
+            pill:    '#262638',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #0D0D12; min-height: 100vh; font-family: 'Geist Mono', ui-monospace, monospace; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #0D0D12; }
+    ::-webkit-scrollbar-thumb { background: #6C5DD3; border-radius: 4px; }
+
+    /* Smooth transitions */
+    .activity-card { transition: opacity 0.25s ease, transform 0.25s ease; }
+    .activity-card.completed { opacity: 0.45; }
+    .activity-card.completed .card-title { text-decoration: line-through; }
+
+    /* Connector line */
+    .date-rail-connector { position: absolute; left: 50%; top: 100%; width: 2px; height: 32px; background: linear-gradient(to bottom, #6C5DD3, transparent); transform: translateX(-50%); }
+
+    /* Pill badge */
+    .time-pill { font-family: 'JetBrains Mono', monospace; }
+    .cost-badge { font-family: 'JetBrains Mono', monospace; }
+
+    /* Bottom nav blur */
+    .bottom-nav { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+
+    /* Modal overlay */
+    .modal-overlay { animation: fadeIn 0.2s ease; }
+    .modal-sheet  { animation: slideUp 0.25s ease; }
+    @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* Progress bar transition */
+    #budget-bar { transition: width 0.5s ease; }
+
+    /* Tag pills per category */
+    .tag-FLIGHT   { background: #1a2744; color: #60a5fa; }
+    .tag-HOTEL    { background: #1a2b22; color: #34d399; }
+    .tag-FOOD     { background: #2b1a1a; color: #f87171; }
+    .tag-EXPLORE  { background: #261a2b; color: #c084fc; }
+    .tag-LEISURE  { background: #2b261a; color: #fbbf24; }
+    .tag-TRANSPORT{ background: #1a2726; color: #2dd4bf; }
+    .tag-OTHER    { background: #262638; color: #94a3b8; }
+
+    /* Checkbox custom */
+    .pack-check:checked + .pack-label { text-decoration: line-through; opacity: 0.5; }
+
+    /* Number font */
+    .num { font-family: 'JetBrains Mono', monospace; }
+
+    /* Prevent body scroll when modal open */
+    body.modal-open { overflow: hidden; }
+  </style>
+</head>
+<body class="flex items-start justify-center py-0 md:py-8 bg-bg min-h-screen">
+
+  <!-- ═══════════════════════════════════════════════
+       SMARTPHONE FRAME (centered on desktop)
+  ════════════════════════════════════════════════ -->
+  <div id="app-frame"
+    class="relative w-full md:max-w-[420px] bg-surface min-h-screen md:min-h-0 md:h-[860px] md:rounded-3xl md:shadow-2xl overflow-hidden flex flex-col"
+    style="box-shadow: 0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05);">
+
+    <!-- ─── TOP STATUS BAR (decorative, desktop only) ─── -->
+    <div class="hidden md:flex items-center justify-between px-6 pt-3 pb-1 text-white/30 text-xs num">
+      <span>9:41</span>
+      <div class="flex gap-1 items-center">
+        <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><rect x="0" y="3" width="3" height="7" rx="1" fill="currentColor"/><rect x="4" y="2" width="3" height="8" rx="1" fill="currentColor"/><rect x="8" y="0" width="3" height="10" rx="1" fill="currentColor"/><rect x="12" y="1" width="2" height="9" rx="1" fill="currentColor" opacity="0.3"/></svg>
+        <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M7 2C9.2 2 11.2 3 12.5 4.6L13.8 3.3C12.1 1.3 9.7 0 7 0C4.3 0 1.9 1.3 0.2 3.3L1.5 4.6C2.8 3 4.8 2 7 2Z" fill="currentColor"/><path d="M7 5C8.1 5 9.1 5.5 9.8 6.2L11.1 4.9C10 3.7 8.6 3 7 3C5.4 3 4 3.7 2.9 4.9L4.2 6.2C4.9 5.5 5.9 5 7 5Z" fill="currentColor"/><circle cx="7" cy="8" r="1.5" fill="currentColor"/></svg>
+        <svg width="22" height="10" viewBox="0 0 22 10" fill="none"><rect x="0.5" y="0.5" width="19" height="9" rx="2.5" stroke="currentColor" stroke-opacity="0.35"/><rect x="2" y="2" width="13" height="6" rx="1.5" fill="currentColor"/><path d="M21 3.5v3c.8-.4 1.4-1 1.4-1.5S21.8 3.9 21 3.5z" fill="currentColor" opacity="0.4"/></svg>
+      </div>
+    </div>
+
+    <!-- ─── SCROLLABLE CONTENT AREA ─── -->
+    <div id="scroll-area" class="flex-1 overflow-y-auto pb-28">
+
+      <!-- ══ HEADER ══ -->
+      <header class="px-5 pt-4 pb-3">
+        <div class="flex items-center justify-between mb-1">
+          <div>
+            <p class="text-white/40 text-xs tracking-widest uppercase">HELLO, TRAVELER!</p>
+            <h1 id="header-trip-name" class="text-white text-lg font-bold leading-tight mt-0.5">Loading…</h1>
+          </div>
+          <button onclick="openModal('settings')"
+            class="w-9 h-9 rounded-xl flex items-center justify-center"
+            style="background:#262638"
+            aria-label="Trip settings">
+            <!-- Settings / gear icon -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6C5DD3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
+        <p id="header-dates" class="text-white/35 text-xs num">— · —</p>
+      </header>
+
+      <!-- ══ BUDGET WIDGET ══ -->
+      <div class="mx-4 mb-4 rounded-2xl p-4" style="background:#1E1E28; border:1px solid rgba(255,255,255,0.06)">
+        <div class="grid grid-cols-3 gap-2 mb-3">
+          <div>
+            <p class="text-white/40 text-xs uppercase tracking-wide mb-0.5">Budget</p>
+            <p id="bud-total" class="text-white font-semibold text-sm num">—</p>
+          </div>
+          <div class="text-center">
+            <p class="text-white/40 text-xs uppercase tracking-wide mb-0.5">Spent</p>
+            <p id="bud-spent" class="text-white font-semibold text-sm num">—</p>
+          </div>
+          <div class="text-right">
+            <p class="text-white/40 text-xs uppercase tracking-wide mb-0.5">Left</p>
+            <p id="bud-left" class="font-semibold text-sm num">—</p>
+          </div>
+        </div>
+        <!-- Progress bar -->
+        <div class="w-full h-2 rounded-full" style="background:#262638">
+          <div id="budget-bar" class="h-2 rounded-full" style="width:0%; background:#6C5DD3"></div>
+        </div>
+        <p id="budget-pct" class="text-right text-xs text-white/30 num mt-1">0%</p>
+      </div>
+
+      <!-- ══ TAB CONTENT ══ -->
+      <div id="view-itinerary" class="px-4"><!-- rendered by JS --></div>
+      <div id="view-checklist" class="hidden px-4"><!-- rendered by JS --></div>
+
+    </div><!-- end scroll-area -->
+
+    <!-- ══ FLOATING BOTTOM NAV ══ -->
+    <div class="absolute bottom-0 left-0 right-0 pb-safe px-4 pb-5 pt-2">
+      <nav class="bottom-nav flex items-center justify-around rounded-2xl px-6 py-3 relative"
+        style="background:rgba(24,24,32,0.92); border:1px solid rgba(255,255,255,0.07)">
+
+        <!-- Itinerary tab -->
+        <button id="tab-itinerary" onclick="switchTab('itinerary')"
+          class="flex flex-col items-center gap-1 text-xs transition-colors"
+          style="color:#6C5DD3" aria-label="Itinerary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <span>Timeline</span>
+        </button>
+
+        <!-- FAB (+) -->
+        <button onclick="openModal('add-activity')"
+          class="w-14 h-14 rounded-full flex items-center justify-center shadow-lg -mt-6 transition-transform active:scale-95"
+          style="background:linear-gradient(135deg,#7C3AED,#6C5DD3); box-shadow:0 8px 24px rgba(108,93,211,0.5)"
+          aria-label="Add new">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+
+        <!-- Checklist tab -->
+        <button id="tab-checklist" onclick="switchTab('checklist')"
+          class="flex flex-col items-center gap-1 text-xs transition-colors"
+          style="color:rgba(255,255,255,0.35)" aria-label="Checklist">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+          <span>Packing</span>
+        </button>
+      </nav>
+    </div>
+
+  </div><!-- end app-frame -->
+
+  <!-- ═══════════════════════════════════════════════
+       MODALS PORTAL
+  ════════════════════════════════════════════════ -->
+  <div id="modal-backdrop" class="modal-overlay hidden fixed inset-0 z-50 flex items-end justify-center md:items-center"
+    style="background:rgba(0,0,0,0.65)" onclick="closeModalOnBackdrop(event)">
+    <div id="modal-container" class="modal-sheet w-full md:max-w-[420px] rounded-t-3xl md:rounded-3xl overflow-hidden"
+      style="background:#1E1E28; border:1px solid rgba(255,255,255,0.07); max-height:90vh; overflow-y:auto">
+    </div>
+  </div>
+
+  <!-- Hidden file input for JSON import -->
+  <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="handleImport(event)" />
+
+  <script>
+    /* ══════════════════════════════════════════════
+       STATE MANAGEMENT
+    ═══════════════════════════════════════════════ */
+    const STORAGE_KEY = 'trip_planner_data';
+
+    const defaultData = {
+      trip: {
+        id: uid(),
+        title: 'Tokyo Autumn Trip',
+        destination: 'Tokyo, Japan 🇯🇵',
+        start_date: '2025-10-06',
+        end_date: '2025-10-08',
+        currency: 'USD',
+        total_budget: 2500,
+        created_at: new Date().toISOString(),
+      },
+      days: [
+        { id: uid(), day_number: 1, date_string: '2025-10-06', day_label: '6 Oct' },
+        { id: uid(), day_number: 2, date_string: '2025-10-07', day_label: '7 Oct' },
+        { id: uid(), day_number: 3, date_string: '2025-10-08', day_label: '8 Oct' },
+      ],
+      activities: [],
+      packing: [],
+    };
+
+    function buildDefaultActivities(days) {
+      return [
+        { id: uid(), day_id: days[0].id, time_start: '08:00', time_end: '10:00', title: 'Depart from Home Airport', category_tag: 'FLIGHT',    estimated_cost: 850, is_completed: false },
+        { id: uid(), day_id: days[0].id, time_start: '14:00', time_end: '15:00', title: 'Check-in Shinjuku Hotel',   category_tag: 'HOTEL',     estimated_cost: 180, is_completed: false },
+        { id: uid(), day_id: days[0].id, time_start: '18:30', time_end: '20:00', title: 'Ramen at Ichiran',          category_tag: 'FOOD',      estimated_cost: 25,  is_completed: false },
+        { id: uid(), day_id: days[1].id, time_start: '09:00', time_end: '11:30', title: 'Explore Shibuya Crossing',  category_tag: 'EXPLORE',   estimated_cost: 0,   is_completed: false },
+        { id: uid(), day_id: days[1].id, time_start: '12:00', time_end: '13:30', title: 'Lunch at Tsukiji Market',   category_tag: 'FOOD',      estimated_cost: 40,  is_completed: false },
+        { id: uid(), day_id: days[1].id, time_start: '15:00', time_end: '17:00', title: 'Akihabara Electronics Tour',category_tag: 'LEISURE',   estimated_cost: 120, is_completed: false },
+        { id: uid(), day_id: days[1].id, time_start: '19:00', time_end: '21:00', title: 'TeamLab Borderless',        category_tag: 'EXPLORE',   estimated_cost: 32,  is_completed: false },
+        { id: uid(), day_id: days[2].id, time_start: '08:00', time_end: '10:00', title: 'Morning Senso-ji Temple',   category_tag: 'EXPLORE',   estimated_cost: 0,   is_completed: false },
+        { id: uid(), day_id: days[2].id, time_start: '14:00', time_end: '16:00', title: 'Narita Airport Transit',    category_tag: 'TRANSPORT', estimated_cost: 18,  is_completed: false },
+        { id: uid(), day_id: days[2].id, time_start: '18:00', time_end: '06:00', title: 'Return Flight Home',        category_tag: 'FLIGHT',    estimated_cost: 0,   is_completed: false },
+      ];
+    }
+
+    function buildDefaultPacking() {
+      const cats = [
+        { cat: 'Documents',    items: ['Passport', 'Travel Insurance', 'Hotel Voucher', 'Return Flight Ticket'] },
+        { cat: 'Clothing',     items: ['T-Shirts (5x)', 'Jacket', 'Comfortable Sneakers', 'Socks & Underwear'] },
+        { cat: 'Electronics',  items: ['Smartphone + Charger', 'Power Bank', 'Earphones', 'Travel Adapter'] },
+        { cat: 'Medicines',    items: ['Paracetamol', 'Allergy Meds', 'Vitamins', 'Hand Sanitizer'] },
+      ];
+      const items = [];
+      cats.forEach(({ cat, items: names }) => {
+        names.forEach(name => items.push({ id: uid(), item_name: name, category: cat, is_packed: false }));
+      });
+      return items;
+    }
+
+    // Global state
+    let AppState = { trip: {}, days: [], activities: [], packing: [] };
+    let currentTab = 'itinerary';
+    let currentModal = null;
+
+    /* ══════════════════════════════════════════════
+       PERSISTENCE LAYER
+    ═══════════════════════════════════════════════ */
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(AppState));
+      } catch (e) {
+        console.warn('LocalStorage quota exceeded:', e);
+      }
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          AppState = JSON.parse(raw);
+          return true;
+        }
+      } catch (e) {
+        console.warn('Failed to parse state:', e);
+      }
+      return false;
+    }
+
+    /* ══════════════════════════════════════════════
+       UTILITIES
+    ═══════════════════════════════════════════════ */
+    function uid() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    }
+
+    function fmtCurrency(amount, currency) {
+      const sym = currency === 'IDR' ? 'Rp' : currency === 'EUR' ? '€' : currency === 'JPY' ? '¥' : '$';
+      if (currency === 'IDR') return sym + new Intl.NumberFormat('id-ID').format(amount);
+      if (currency === 'JPY') return sym + new Intl.NumberFormat('ja-JP').format(amount);
+      return sym + new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+    }
+
+    function calcSpent() {
+      return AppState.activities.reduce((s, a) => s + (Number(a.estimated_cost) || 0), 0);
+    }
+
+    function fmtDateRange(s, e) {
+      if (!s || !e) return '—';
+      const opts = { month: 'short', day: 'numeric' };
+      const sd = new Date(s + 'T00:00:00'), ed = new Date(e + 'T00:00:00');
+      return sd.toLocaleDateString('en-GB', opts) + ' – ' + ed.toLocaleDateString('en-GB', opts);
+    }
+
+    /* ══════════════════════════════════════════════
+       RENDERING ENGINE
+    ═══════════════════════════════════════════════ */
+    function renderAll() {
+      renderHeader();
+      renderBudget();
+      renderItinerary();
+      renderChecklist();
+    }
+
+    function renderHeader() {
+      const { trip } = AppState;
+      document.getElementById('header-trip-name').textContent = trip.destination || trip.title || 'My Trip';
+      document.getElementById('header-dates').textContent = fmtDateRange(trip.start_date, trip.end_date);
+    }
+
+    function renderBudget() {
+      const { trip } = AppState;
+      const spent   = calcSpent();
+      const budget  = Number(trip.total_budget) || 0;
+      const left    = budget - spent;
+      const pct     = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+      const over    = spent > budget;
+      const barColor = pct < 70 ? '#6C5DD3' : pct < 90 ? '#f59e0b' : '#ef4444';
+      const leftColor = over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#34d399';
+
+      document.getElementById('bud-total').textContent  = fmtCurrency(budget, trip.currency);
+      document.getElementById('bud-spent').textContent  = fmtCurrency(spent,  trip.currency);
+      const leftEl = document.getElementById('bud-left');
+      leftEl.textContent  = fmtCurrency(Math.abs(left), trip.currency);
+      leftEl.style.color  = leftColor;
+      if (over) leftEl.textContent = '-' + fmtCurrency(Math.abs(left), trip.currency);
+
+      document.getElementById('budget-bar').style.width      = pct + '%';
+      document.getElementById('budget-bar').style.background = barColor;
+      document.getElementById('budget-pct').textContent = Math.round(pct) + '%' + (over ? ' ⚠ Over Budget!' : '');
+      if (over) document.getElementById('budget-pct').style.color = '#ef4444';
+      else document.getElementById('budget-pct').style.color = 'rgba(255,255,255,0.3)';
+    }
+
+    function renderItinerary() {
+      const container = document.getElementById('view-itinerary');
+      const { days, activities } = AppState;
+      if (!days.length) {
+        container.innerHTML = `<p class="text-center text-white/30 text-sm py-12">No days added yet.<br>Tap (+) to add activities.</p>`;
+        return;
+      }
+      container.innerHTML = days.map((day, di) => {
+        const acts = activities.filter(a => a.day_id === day.id)
+          .sort((a, b) => a.time_start.localeCompare(b.time_start));
+        const isLast = di === days.length - 1;
+        return `
+        <div class="flex gap-3 mb-2">
+          <!-- Date Rail -->
+          <div class="flex flex-col items-center flex-shrink-0 w-14">
+            <div class="relative w-10 h-10 rounded-xl flex flex-col items-center justify-center text-center flex-shrink-0"
+              style="background:#6C5DD3; color:white">
+              <span class="text-xs font-bold leading-none">${day.date_string ? new Date(day.date_string + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric' }) : day.day_number}</span>
+              <span class="text-xs opacity-80 leading-none">${day.date_string ? new Date(day.date_string + 'T00:00:00').toLocaleDateString('en-GB', { month: 'short' }) : 'Day'}</span>
+              ${!isLast ? `<div class="date-rail-connector"></div>` : ''}
+            </div>
+          </div>
+
+          <!-- Activity Cards Column -->
+          <div class="flex-1 flex flex-col gap-2 mb-4">
+            ${acts.length ? acts.map(act => renderActivityCard(act)).join('') : `<div class="text-white/25 text-xs py-3 pl-1">No activities yet</div>`}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderActivityCard(act) {
+      const tagClass = 'tag-' + act.category_tag;
+      const cost = Number(act.estimated_cost) || 0;
+      return `
+      <div id="card-${act.id}" class="activity-card rounded-2xl p-3 ${act.is_completed ? 'completed' : ''}"
+        style="background:#1E1E28; border:1px solid rgba(255,255,255,0.06)">
+        <!-- Time pill & actions -->
+        <div class="flex items-center justify-between mb-2">
+          <span class="time-pill text-xs px-2 py-0.5 rounded-full"
+            style="background:#262638; color:rgba(255,255,255,0.5)">
+            ${act.time_start}${act.time_end ? ' – ' + act.time_end : ''}
+          </span>
+          <div class="flex items-center gap-1">
+            <!-- Complete toggle -->
+            <button onclick="toggleActivity('${act.id}')" aria-label="Toggle complete"
+              class="w-6 h-6 rounded-full flex items-center justify-center transition-colors"
+              style="background:${act.is_completed ? '#6C5DD3' : '#262638'}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="${act.is_completed ? 'white' : 'rgba(255,255,255,0.4)'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </button>
+            <!-- Delete -->
+            <button onclick="deleteActivity('${act.id}')" aria-label="Delete activity"
+              class="w-6 h-6 rounded-full flex items-center justify-center"
+              style="background:#262638">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2.5" stroke-linecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Title -->
+        <p class="card-title text-white text-sm font-medium leading-snug mb-2">${escHtml(act.title)}</p>
+
+        <!-- Bottom row: tag + cost -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs px-2 py-0.5 rounded-md font-semibold tracking-wider ${tagClass}">
+            ${act.category_tag}
+          </span>
+          ${cost > 0 ? `<span class="cost-badge text-xs font-medium" style="color:#6C5DD3">${fmtCurrency(cost, AppState.trip.currency)}</span>` : `<span class="text-xs text-white/25">Free</span>`}
+        </div>
+      </div>`;
+    }
+
+    function renderChecklist() {
+      const container = document.getElementById('view-checklist');
+      const { packing } = AppState;
+
+      // Group by category
+      const cats = {};
+      packing.forEach(item => {
+        if (!cats[item.category]) cats[item.category] = [];
+        cats[item.category].push(item);
+      });
+
+      const packed  = packing.filter(i => i.is_packed).length;
+      const total   = packing.length;
+      const pct     = total > 0 ? Math.round((packed / total) * 100) : 0;
+
+      container.innerHTML = `
+      <!-- Progress summary -->
+      <div class="rounded-2xl p-4 mb-4 flex items-center justify-between"
+        style="background:#1E1E28; border:1px solid rgba(255,255,255,0.06)">
+        <div>
+          <p class="text-white/40 text-xs uppercase tracking-wide mb-0.5">Packed Items</p>
+          <p class="text-white font-bold text-lg num">${packed} <span class="text-white/40 font-normal text-sm">/ ${total}</span></p>
+        </div>
+        <div class="relative w-14 h-14">
+          <svg viewBox="0 0 36 36" class="w-14 h-14 -rotate-90">
+            <circle cx="18" cy="18" r="14" fill="none" stroke="#262638" stroke-width="3"/>
+            <circle cx="18" cy="18" r="14" fill="none" stroke="#6C5DD3" stroke-width="3"
+              stroke-dasharray="${pct * 0.879} 100" stroke-linecap="round"/>
+          </svg>
+          <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white num">${pct}%</span>
+        </div>
+      </div>
+
+      <!-- Categories -->
+      ${Object.entries(cats).map(([cat, items]) => `
+        <div class="mb-4">
+          <p class="text-white/40 text-xs uppercase tracking-widest mb-2 pl-1">${escHtml(cat)}</p>
+          <div class="rounded-2xl overflow-hidden" style="background:#1E1E28; border:1px solid rgba(255,255,255,0.06)">
+            ${items.map((item, idx) => `
+              <label class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors
+                ${idx < items.length - 1 ? 'border-b border-white/[0.04]' : ''}">
+                <input type="checkbox" class="pack-check sr-only" ${item.is_packed ? 'checked' : ''}
+                  onchange="togglePacking('${item.id}')" />
+                <span class="w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center transition-colors"
+                  style="background:${item.is_packed ? '#6C5DD3' : '#262638'}; border:1px solid ${item.is_packed ? '#6C5DD3' : 'rgba(255,255,255,0.1)'}">
+                  ${item.is_packed ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+                </span>
+                <span class="pack-label text-sm text-white transition-all ${item.is_packed ? 'line-through opacity-40' : ''}">${escHtml(item.item_name)}</span>
+                <button onclick="event.preventDefault(); deletePackingItem('${item.id}')"
+                  class="ml-auto w-5 h-5 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 focus:opacity-100"
+                  style="background:#262638" aria-label="Delete item">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="3" stroke-linecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </label>`).join('')}
+          </div>
+        </div>
+      `).join('')}
+
+      <!-- Quick add item form -->
+      <div class="rounded-2xl p-4 mb-2" style="background:#1E1E28; border:1px solid rgba(255,255,255,0.06)">
+        <p class="text-white/40 text-xs uppercase tracking-wide mb-3">Add Packing Item</p>
+        <div class="flex flex-col gap-2">
+          <input id="pack-item-name" type="text" placeholder="Item name…"
+            class="w-full bg-pill rounded-xl px-3 py-2 text-white text-sm outline-none placeholder-white/25 border border-white/5 focus:border-accent"
+            onkeydown="if(event.key==='Enter') addPackingItem()" />
+          <div class="flex gap-2">
+            <select id="pack-item-cat" class="flex-1 bg-pill rounded-xl px-3 py-2 text-white text-sm outline-none border border-white/5 focus:border-accent">
+              <option value="Documents">Documents</option>
+              <option value="Clothing">Clothing</option>
+              <option value="Electronics">Electronics</option>
+              <option value="Medicines">Medicines</option>
+              <option value="Other">Other</option>
+            </select>
+            <button onclick="addPackingItem()"
+              class="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity active:opacity-70"
+              style="background:#6C5DD3">Add</button>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    /* ══════════════════════════════════════════════
+       EVENT HANDLERS — ITINERARY
+    ═══════════════════════════════════════════════ */
+    function toggleActivity(id) {
+      const act = AppState.activities.find(a => a.id === id);
+      if (!act) return;
+      act.is_completed = !act.is_completed;
+      saveState();
+      renderItinerary();
+    }
+
+    function deleteActivity(id) {
+      AppState.activities = AppState.activities.filter(a => a.id !== id);
+      saveState();
+      renderAll();
+    }
+
+    /* ══════════════════════════════════════════════
+       EVENT HANDLERS — PACKING
+    ═══════════════════════════════════════════════ */
+    function togglePacking(id) {
+      const item = AppState.packing.find(i => i.id === id);
+      if (!item) return;
+      item.is_packed = !item.is_packed;
+      saveState();
+      renderChecklist();
+    }
+
+    function deletePackingItem(id) {
+      AppState.packing = AppState.packing.filter(i => i.id !== id);
+      saveState();
+      renderChecklist();
+    }
+
+    function addPackingItem() {
+      const nameEl = document.getElementById('pack-item-name');
+      const catEl  = document.getElementById('pack-item-cat');
+      const name   = nameEl.value.trim();
+      if (!name) { nameEl.focus(); return; }
+      AppState.packing.push({ id: uid(), item_name: name, category: catEl.value, is_packed: false });
+      nameEl.value = '';
+      saveState();
+      renderChecklist();
+    }
+
+    /* ══════════════════════════════════════════════
+       TAB SWITCHING
+    ═══════════════════════════════════════════════ */
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById('view-itinerary').classList.toggle('hidden', tab !== 'itinerary');
+      document.getElementById('view-checklist').classList.toggle('hidden', tab !== 'checklist');
+
+      const ACTIVE   = '#6C5DD3';
+      const INACTIVE = 'rgba(255,255,255,0.35)';
+      document.getElementById('tab-itinerary').style.color = tab === 'itinerary' ? ACTIVE : INACTIVE;
+      document.getElementById('tab-checklist').style.color = tab === 'checklist' ? ACTIVE : INACTIVE;
+    }
+
+    /* ══════════════════════════════════════════════
+       MODAL SYSTEM
+    ═══════════════════════════════════════════════ */
+    function openModal(type, extra) {
+      currentModal = type;
+      document.body.classList.add('modal-open');
+      const container = document.getElementById('modal-container');
+
+      if (type === 'add-activity') {
+        container.innerHTML = renderAddActivityModal();
+      } else if (type === 'settings') {
+        container.innerHTML = renderSettingsModal();
+      } else if (type === 'edit-trip') {
+        container.innerHTML = renderEditTripModal();
+      }
+
+      document.getElementById('modal-backdrop').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.body.classList.remove('modal-open');
+      document.getElementById('modal-backdrop').classList.add('hidden');
+      document.getElementById('modal-container').innerHTML = '';
+      currentModal = null;
+    }
+
+    function closeModalOnBackdrop(e) {
+      if (e.target === document.getElementById('modal-backdrop')) closeModal();
+    }
+
+    /* ─── Add Activity Modal ─── */
+    function renderAddActivityModal() {
+      const daysOpts = AppState.days.map(d =>
+        `<option value="${d.id}">${d.day_label || d.date_string}</option>`
+      ).join('');
+      const tags = ['FLIGHT', 'HOTEL', 'FOOD', 'EXPLORE', 'LEISURE', 'TRANSPORT', 'OTHER'];
+
+      return `
+      <div class="p-5">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-white font-bold text-base">Add Activity</h2>
+          <button onclick="closeModal()" class="w-7 h-7 rounded-full flex items-center justify-center" style="background:#262638">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <div>
+            <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Day</label>
+            <select id="m-day" class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent">
+              ${daysOpts}
+            </select>
+          </div>
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Start</label>
+              <input id="m-time-start" type="time" value="09:00"
+                class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent num"
+                style="color-scheme:dark" />
+            </div>
+            <div class="flex-1">
+              <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">End</label>
+              <input id="m-time-end" type="time" value="10:00"
+                class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent num"
+                style="color-scheme:dark" />
+            </div>
+          </div>
+          <div>
+            <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Activity Title</label>
+            <input id="m-title" type="text" placeholder="e.g. Visit Senso-ji Temple"
+              class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent placeholder-white/25" />
+          </div>
+          <div>
+            <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Category</label>
+            <div class="flex flex-wrap gap-2">
+              ${tags.map((t, i) => `
+                <label class="cursor-pointer">
+                  <input type="radio" name="m-tag" value="${t}" class="sr-only" ${i === 0 ? 'checked' : ''} />
+                  <span class="tag-pill-radio text-xs px-3 py-1 rounded-md font-semibold tracking-wider tag-${t} block
+                    ring-0 transition-all"
+                    onclick="selectTag(this)">${t}</span>
+                </label>`).join('')}
+            </div>
+          </div>
+          <div>
+            <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Estimated Cost (${AppState.trip.currency})</label>
+            <input id="m-cost" type="number" min="0" value="0" placeholder="0"
+              class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent num" />
+          </div>
+        </div>
+
+        <button onclick="submitAddActivity()"
+          class="w-full mt-5 py-3 rounded-2xl text-white font-semibold text-sm transition-opacity active:opacity-70"
+          style="background:linear-gradient(135deg,#7C3AED,#6C5DD3)">
+          Add to Timeline
+        </button>
+      </div>`;
+    }
+
+    function selectTag(el) {
+      // Visual feedback for selected tag
+      document.querySelectorAll('.tag-pill-radio').forEach(e => e.style.boxShadow = 'none');
+      el.style.boxShadow = '0 0 0 2px white';
+    }
+
+    function submitAddActivity() {
+      const dayId  = document.getElementById('m-day')?.value;
+      const timeS  = document.getElementById('m-time-start')?.value;
+      const timeE  = document.getElementById('m-time-end')?.value;
+      const title  = document.getElementById('m-title')?.value.trim();
+      const tag    = document.querySelector('input[name="m-tag"]:checked')?.value || 'OTHER';
+      const cost   = parseFloat(document.getElementById('m-cost')?.value) || 0;
+
+      if (!title) {
+        document.getElementById('m-title').focus();
+        document.getElementById('m-title').style.borderColor = '#ef4444';
+        return;
+      }
+
+      AppState.activities.push({
+        id: uid(), day_id: dayId, time_start: timeS, time_end: timeE,
+        title, category_tag: tag, estimated_cost: cost, is_completed: false,
+      });
+      saveState();
+      closeModal();
+      renderAll();
+    }
+
+    /* ─── Settings Modal ─── */
+    function renderSettingsModal() {
+      return `
+      <div class="p-5">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-white font-bold text-base">Trip Settings</h2>
+          <button onclick="closeModal()" class="w-7 h-7 rounded-full flex items-center justify-center" style="background:#262638">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <!-- Edit Trip -->
+          <button onclick="closeModal(); openModal('edit-trip')"
+            class="flex items-center gap-3 w-full p-4 rounded-2xl text-left transition-colors hover:bg-white/5"
+            style="background:#262638; border:1px solid rgba(255,255,255,0.06)">
+            <span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#6C5DD3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </span>
+            <div>
+              <p class="text-white text-sm font-medium">Edit Trip Profile</p>
+              <p class="text-white/40 text-xs">Name, dates, budget, currency</p>
+            </div>
+          </button>
+
+          <!-- Export -->
+          <button onclick="exportData()"
+            class="flex items-center gap-3 w-full p-4 rounded-2xl text-left transition-colors hover:bg-white/5"
+            style="background:#262638; border:1px solid rgba(255,255,255,0.06)">
+            <span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#262638; border:1px solid rgba(108,93,211,0.4)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6C5DD3" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </span>
+            <div>
+              <p class="text-white text-sm font-medium">Export Backup</p>
+              <p class="text-white/40 text-xs">Download trip_backup.json</p>
+            </div>
+          </button>
+
+          <!-- Import -->
+          <button onclick="document.getElementById('import-file-input').click()"
+            class="flex items-center gap-3 w-full p-4 rounded-2xl text-left transition-colors hover:bg-white/5"
+            style="background:#262638; border:1px solid rgba(255,255,255,0.06)">
+            <span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#262638; border:1px solid rgba(108,93,211,0.4)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6C5DD3" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </span>
+            <div>
+              <p class="text-white text-sm font-medium">Import Backup</p>
+              <p class="text-white/40 text-xs">Restore from .json file</p>
+            </div>
+          </button>
+
+          <!-- Reset -->
+          <button onclick="resetData()"
+            class="flex items-center gap-3 w-full p-4 rounded-2xl text-left transition-colors hover:bg-white/5"
+            style="background:#2b1a1a; border:1px solid rgba(239,68,68,0.15)">
+            <span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#3a1a1a">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+            </span>
+            <div>
+              <p class="text-red-400 text-sm font-medium">Reset to Demo Data</p>
+              <p class="text-white/40 text-xs">Clears all data and loads defaults</p>
+            </div>
+          </button>
+        </div>
+      </div>`;
+    }
+
+    /* ─── Edit Trip Modal ─── */
+    function renderEditTripModal() {
+      const { trip } = AppState;
+      return `
+      <div class="p-5">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-white font-bold text-base">Edit Trip Profile</h2>
+          <button onclick="closeModal()" class="w-7 h-7 rounded-full flex items-center justify-center" style="background:#262638">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <div>
+            <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Trip Name</label>
+            <input id="et-title" type="text" value="${escAttr(trip.title)}" placeholder="e.g. Tokyo Autumn Trip"
+              class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent placeholder-white/25" />
+          </div>
+          <div>
+            <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Destination</label>
+            <input id="et-dest" type="text" value="${escAttr(trip.destination)}" placeholder="e.g. Tokyo, Japan"
+              class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent placeholder-white/25" />
+          </div>
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Start Date</label>
+              <input id="et-start" type="date" value="${trip.start_date || ''}"
+                class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent num"
+                style="color-scheme:dark" />
+            </div>
+            <div class="flex-1">
+              <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">End Date</label>
+              <input id="et-end" type="date" value="${trip.end_date || ''}"
+                class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent num"
+                style="color-scheme:dark" />
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Total Budget</label>
+              <input id="et-budget" type="number" min="0" value="${trip.total_budget || 0}"
+                class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent num" />
+            </div>
+            <div class="w-28">
+              <label class="text-white/40 text-xs uppercase tracking-wide block mb-1">Currency</label>
+              <select id="et-currency" class="w-full bg-pill rounded-xl px-3 py-2.5 text-white text-sm outline-none border border-white/5 focus:border-accent">
+                ${['USD','EUR','IDR','JPY','GBP','SGD'].map(c =>
+                  `<option value="${c}" ${trip.currency === c ? 'selected' : ''}>${c}</option>`
+                ).join('')}
+              </select>
+            </div>
+          </div>
+
+          <!-- Manage Days -->
+          <div>
+            <label class="text-white/40 text-xs uppercase tracking-wide block mb-2">Trip Days</label>
+            <div id="et-days-list" class="flex flex-col gap-1 mb-2">
+              ${AppState.days.map(d => `
+                <div class="flex items-center justify-between px-3 py-2 rounded-xl" style="background:#262638">
+                  <span class="text-white text-sm">Day ${d.day_number} — ${d.day_label || d.date_string}</span>
+                  <button onclick="removeDay('${d.id}')"
+                    class="text-xs text-red-400 hover:text-red-300 px-2 py-0.5 rounded-md transition-colors"
+                    style="background:rgba(239,68,68,0.1)">Remove</button>
+                </div>`).join('')}
+            </div>
+            <button onclick="addDay()"
+              class="w-full py-2 rounded-xl text-sm text-white/60 border border-dashed border-white/15 hover:border-accent hover:text-white transition-colors">
+              + Add Day
+            </button>
+          </div>
+        </div>
+
+        <button onclick="submitEditTrip()"
+          class="w-full mt-5 py-3 rounded-2xl text-white font-semibold text-sm transition-opacity active:opacity-70"
+          style="background:linear-gradient(135deg,#7C3AED,#6C5DD3)">
+          Save Changes
+        </button>
+      </div>`;
+    }
+
+    function addDay() {
+      const days = AppState.days;
+      const lastDay = days[days.length - 1];
+      const dayNum  = days.length + 1;
+      let dateStr   = '';
+      if (lastDay?.date_string) {
+        const d = new Date(lastDay.date_string + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        dateStr = d.toISOString().slice(0, 10);
+      }
+      const dayLabel = dateStr
+        ? new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+        : 'Day ' + dayNum;
+      const newDay = { id: uid(), day_number: dayNum, date_string: dateStr, day_label: dayLabel };
+      AppState.days.push(newDay);
+      saveState();
+      // Re-render day list inside modal
+      const listEl = document.getElementById('et-days-list');
+      if (listEl) listEl.innerHTML = AppState.days.map(d => `
+        <div class="flex items-center justify-between px-3 py-2 rounded-xl" style="background:#262638">
+          <span class="text-white text-sm">Day ${d.day_number} — ${d.day_label || d.date_string}</span>
+          <button onclick="removeDay('${d.id}')" class="text-xs text-red-400 hover:text-red-300 px-2 py-0.5 rounded-md transition-colors" style="background:rgba(239,68,68,0.1)">Remove</button>
+        </div>`).join('');
+    }
+
+    function removeDay(id) {
+      AppState.days = AppState.days.filter(d => d.id !== id);
+      AppState.activities = AppState.activities.filter(a => a.day_id !== id);
+      saveState();
+      const listEl = document.getElementById('et-days-list');
+      if (listEl) listEl.innerHTML = AppState.days.map(d => `
+        <div class="flex items-center justify-between px-3 py-2 rounded-xl" style="background:#262638">
+          <span class="text-white text-sm">Day ${d.day_number} — ${d.day_label || d.date_string}</span>
+          <button onclick="removeDay('${d.id}')" class="text-xs text-red-400 hover:text-red-300 px-2 py-0.5 rounded-md transition-colors" style="background:rgba(239,68,68,0.1)">Remove</button>
+        </div>`).join('');
+    }
+
+    function submitEditTrip() {
+      AppState.trip.title      = document.getElementById('et-title')?.value.trim()   || AppState.trip.title;
+      AppState.trip.destination= document.getElementById('et-dest')?.value.trim()    || AppState.trip.destination;
+      AppState.trip.start_date = document.getElementById('et-start')?.value          || AppState.trip.start_date;
+      AppState.trip.end_date   = document.getElementById('et-end')?.value            || AppState.trip.end_date;
+      AppState.trip.total_budget = parseFloat(document.getElementById('et-budget')?.value) || AppState.trip.total_budget;
+      AppState.trip.currency   = document.getElementById('et-currency')?.value       || AppState.trip.currency;
+      saveState();
+      closeModal();
+      renderAll();
+    }
+
+    /* ══════════════════════════════════════════════
+       EXPORT / IMPORT
+    ═══════════════════════════════════════════════ */
+    function exportData() {
+      const blob = new Blob([JSON.stringify(AppState, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'trip_backup.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      closeModal();
+    }
+
+    function handleImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed.trip && parsed.days && parsed.activities && parsed.packing) {
+            AppState = parsed;
+            saveState();
+            closeModal();
+            renderAll();
+          } else {
+            alert('Invalid backup file format.');
+          }
+        } catch {
+          alert('Failed to parse JSON file.');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    /* ══════════════════════════════════════════════
+       RESET
+    ═══════════════════════════════════════════════ */
+    function resetData() {
+      if (!confirm('Reset all data to demo trip? This cannot be undone.')) return;
+      const days = defaultData.days.map(d => ({ ...d, id: uid() }));
+      AppState = {
+        trip:       { ...defaultData.trip, id: uid(), created_at: new Date().toISOString() },
+        days,
+        activities: buildDefaultActivities(days),
+        packing:    buildDefaultPacking(),
+      };
+      saveState();
+      closeModal();
+      renderAll();
+    }
+
+    /* ══════════════════════════════════════════════
+       XSS HELPERS
+    ═══════════════════════════════════════════════ */
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function escAttr(str) { return escHtml(str); }
+
+    /* ══════════════════════════════════════════════
+       BOOTSTRAP
+    ═══════════════════════════════════════════════ */
+    (function init() {
+      const hasData = loadState();
+      if (!hasData || !AppState.trip?.id) {
+        // First run: populate default/demo data
+        const days = defaultData.days.map(d => ({ ...d, id: uid() }));
+        AppState = {
+          trip:       { ...defaultData.trip, id: uid(), created_at: new Date().toISOString() },
+          days,
+          activities: buildDefaultActivities(days),
+          packing:    buildDefaultPacking(),
+        };
+        saveState();
+      }
+      renderAll();
+    })();
+  </script>
+</body>
+</html>
